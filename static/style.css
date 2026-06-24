@@ -71,6 +71,17 @@ h1 {
   font-size: 0.92rem;
 }
 
+.subtitle a,
+.hint a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.subtitle a:hover,
+.hint a:hover {
+  text-decoration: underline;
+}
+
 .model-badge {
   padding: 8px 12px;
   border: 1px solid var(--border);
@@ -155,6 +166,7 @@ h1 {
 .hidden {
   display: none !important;
 }
+
 
 .loading,
 .error {

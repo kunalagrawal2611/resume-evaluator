@@ -3,17 +3,17 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Resume Checker</title>
+  <title>Resume Evaluator</title>
   <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
   <div class="page">
     <header class="header">
       <div class="brand">
-        <span class="brand-mark">RC</span>
+        <span class="brand-mark">RE</span>
         <div>
-          <h1>Resume Checker</h1>
-          <p class="subtitle">AI-powered resume evaluation powered by hiring-agent</p>
+          <h1>Resume Evaluator</h1>
+          <p class="subtitle">Web UI for <a href="https://github.com/interviewstreet/hiring-agent" target="_blank" rel="noopener">HackerRank Hiring Agent</a> — we built the interface, not the scoring engine</p>
         </div>
       </div>
       <div class="model-badge" id="modelBadge">Loading model…</div>
@@ -28,7 +28,7 @@
           <input type="file" id="fileInput" accept=".pdf,application/pdf" hidden />
           <button type="button" class="btn btn-primary" id="browseBtn">Choose file</button>
         </div>
-        <p class="hint">First run may take several minutes while the LLM extracts and scores your resume.</p>
+        <p class="hint">First run may take several minutes. Core scoring by <a href="https://github.com/interviewstreet/hiring-agent" target="_blank" rel="noopener">HackerRank Hiring Agent</a>.</p>
       </section>
 
       <section class="loading hidden" id="loadingSection">
