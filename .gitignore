@@ -1,10 +1,12 @@
 # Project Specific Files
 
 **/*.pyc
+*.pdf
 resume/*.pdf
 run/*.pdf
 test_*.py
 cache/
+uploads/
 resume_evaluations.csv
 greenhouse_resumes/*
 

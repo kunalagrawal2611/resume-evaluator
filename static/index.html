@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Resume Checker</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <div class="page">
+    <header class="header">
+      <div class="brand">
+        <span class="brand-mark">RC</span>
+        <div>
+          <h1>Resume Checker</h1>
+          <p class="subtitle">AI-powered resume evaluation powered by hiring-agent</p>
+        </div>
+      </div>
+      <div class="model-badge" id="modelBadge">Loading model…</div>
+    </header>
+
+    <main>
+      <section class="upload-card" id="uploadSection">
+        <div class="dropzone" id="dropzone">
+          <div class="dropzone-icon">PDF</div>
+          <h2>Upload your resume</h2>
+          <p>Drag and drop a PDF here, or click to browse</p>
+          <input type="file" id="fileInput" accept=".pdf,application/pdf" hidden />
+          <button type="button" class="btn btn-primary" id="browseBtn">Choose file</button>
+        </div>
+        <p class="hint">First run may take several minutes while the LLM extracts and scores your resume.</p>
+      </section>
+
+      <section class="loading hidden" id="loadingSection">
+        <div class="spinner"></div>
+        <h2>Evaluating resume…</h2>
+        <p id="loadingFile"></p>
+        <p class="loading-note">Extracting sections, enriching data, and scoring. Please keep this tab open.</p>
+      </section>
+
+      <section class="error hidden" id="errorSection">
+        <h2>Something went wrong</h2>
+        <p id="errorMessage"></p>
+        <button type="button" class="btn btn-secondary" id="retryBtn">Try again</button>
+      </section>
+
+      <section class="results hidden" id="resultsSection">
+        <div class="results-header">
+          <div>
+            <p class="eyebrow">Evaluation complete</p>
+            <h2 id="candidateName">Candidate</h2>
+            <p class="cache-note hidden" id="cacheNote">Loaded from cache — faster re-evaluation</p>
+          </div>
+          <div class="score-ring">
+            <span class="score-value" id="finalScore">0</span>
+            <span class="score-label">/ <span id="maxScore">100</span></span>
+          </div>
+        </div>
+
+        <div class="grid">
+          <div class="panel">
+            <h3>Category scores</h3>
+            <div id="categoriesList"></div>
+          </div>
+
+          <div class="panel">
+            <h3>Adjustments</h3>
+            <div id="adjustments"></div>
+          </div>
+        </div>
+
+        <div class="grid">
+          <div class="panel panel-good">
+            <h3>Key strengths</h3>
+            <ul id="strengthsList"></ul>
+          </div>
+          <div class="panel panel-warn">
+            <h3>Areas for improvement</h3>
+            <ul id="improvementsList"></ul>
+          </div>
+        </div>
+
+        <button type="button" class="btn btn-secondary" id="newEvalBtn">Evaluate another resume</button>
+      </section>
+    </main>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
