@@ -310,14 +310,29 @@ class OllamaProvider:
         return self.client.chat(**chat_params)
 
 
+def _is_non_retriable_quota_error(exc: Exception) -> bool:
+    """Daily/project quota errors won't recover with short retries."""
+    msg = str(exc).lower()
+    return any(
+        phrase in msg
+        for phrase in (
+            "per day",
+            "perday",
+            "free_tier",
+            "freetier",
+            "daily",
+            "billing",
+        )
+    )
+
+
 class GeminiProvider:
     """Google Gemini API provider implementation."""
 
     def __init__(self, api_key: str):
-        import google.generativeai as genai
+        from google import genai
 
-        genai.configure(api_key=api_key)
-        self.client = genai
+        self.client = genai.Client(api_key=api_key)
 
     def chat(
         self,
@@ -330,57 +345,67 @@ class GeminiProvider:
         import re
         import time
         import random
-        from google.api_core.exceptions import ResourceExhausted
+        from google.genai import types
 
         MAX_RETRIES = 5
-        BASE_DELAY = 10.0  # seconds — base for exponential backoff
-        MAX_DELAY = 120.0  # cap so we never wait more than 2 minutes
+        BASE_DELAY = 10.0
+        MAX_DELAY = 120.0
 
-        # Map options to Gemini parameters
-        generation_config = {}
+        config_kwargs: Dict[str, Any] = {}
         if options:
             if "temperature" in options:
-                generation_config["temperature"] = options["temperature"]
+                config_kwargs["temperature"] = options["temperature"]
             if "top_p" in options:
-                generation_config["top_p"] = options["top_p"]
+                config_kwargs["top_p"] = options["top_p"]
 
-        # Create a Gemini model
-        gemini_model = self.client.GenerativeModel(
-            model_name=model, generation_config=generation_config
-        )
+        system_instruction = "\n\n".join(
+            msg["content"] for msg in messages if msg["role"] == "system"
+        ) or None
+        if system_instruction:
+            config_kwargs["system_instruction"] = system_instruction
 
-        # Convert messages to Gemini format
-        gemini_messages = []
+        if "format" in kwargs:
+            from llm_utils import sanitize_json_schema_for_gemini
+
+            config_kwargs["response_mime_type"] = "application/json"
+            config_kwargs["response_schema"] = sanitize_json_schema_for_gemini(
+                kwargs["format"]
+            )
+
+        contents = []
         for msg in messages:
+            if msg["role"] == "system":
+                continue
             role = "user" if msg["role"] == "user" else "model"
-            gemini_messages.append({"role": role, "parts": [msg["content"]]})
+            contents.append(
+                types.Content(
+                    role=role,
+                    parts=[types.Part.from_text(text=msg["content"])],
+                )
+            )
+
+        config = types.GenerateContentConfig(**config_kwargs)
 
         for attempt in range(MAX_RETRIES):
             try:
-                # Send the chat request
-                response = gemini_model.generate_content(gemini_messages)
+                response = self.client.models.generate_content(
+                    model=model,
+                    contents=contents,
+                    config=config,
+                )
+                text = response.text or ""
+                return {"message": {"role": "assistant", "content": text}}
 
-                # Convert Gemini response to Ollama-like format for compatibility
-                return {"message": {"role": "assistant", "content": response.text}}
-
-            except ResourceExhausted as e:
-                if attempt == MAX_RETRIES - 1:
-                    # All retries exhausted — re-raise the original exception.
-                    # This surfaces unrecoverable quota errors (RPD, TPM, etc.)
-                    # instead of silently failing or returning bad data.
+            except Exception as e:
+                if not _is_rate_limit_error(e) or attempt == MAX_RETRIES - 1:
+                    raise
+                if _is_non_retriable_quota_error(e):
                     raise
 
-                # Parse the API-suggested retry delay from the error message
                 match = re.search(r"retry[_ ]in\s+([\d.]+)s", str(e), re.IGNORECASE)
                 api_hint = float(match.group(1)) if match else None
-
-                # Exponential backoff: BASE_DELAY * 2^attempt, capped at MAX_DELAY
                 exp_delay = min(BASE_DELAY * (2 ** attempt), MAX_DELAY)
-
-                # Prefer the API hint when it is shorter than our computed delay
                 delay = api_hint if (api_hint and api_hint < exp_delay) else exp_delay
-
-                # Add ±20% randomized jitter to avoid thundering herd
                 sleep_time = round(delay * random.uniform(0.8, 1.2), 2)
 
                 print(
@@ -389,3 +414,13 @@ class GeminiProvider:
                     f"Retrying in {sleep_time}s..."
                 )
                 time.sleep(sleep_time)
+
+
+def _is_rate_limit_error(exc: Exception) -> bool:
+    msg = str(exc).lower()
+    return (
+        "resource exhausted" in msg
+        or "rate limit" in msg
+        or "quota" in msg
+        or " 429 " in f" {msg} "
+    )

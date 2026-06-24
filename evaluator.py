@@ -1,7 +1,7 @@
 from typing import Dict, List, Optional, Tuple, Any
 from pydantic import BaseModel, Field, field_validator
 from models import JSONResume, EvaluationData
-from llm_utils import initialize_llm_provider, extract_json_from_response
+from llm_utils import initialize_llm_provider, extract_json_from_response, format_llm_error, LLMRequestError
 import logging
 import json
 import re
@@ -86,6 +86,8 @@ class ResumeEvaluator:
 
             return evaluation_data
 
+        except LLMRequestError:
+            raise
         except Exception as e:
             logger.error(f"Error evaluating resume: {str(e)}")
-            raise
+            raise LLMRequestError(format_llm_error(e), original=e) from e

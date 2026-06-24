@@ -16,10 +16,64 @@
           <p class="subtitle">Web UI for <a href="https://github.com/interviewstreet/hiring-agent" target="_blank" rel="noopener">HackerRank Hiring Agent</a> — we built the interface, not the scoring engine</p>
         </div>
       </div>
-      <div class="model-badge" id="modelBadge">Loading model…</div>
+      <div class="header-controls">
+        <button type="button" class="btn btn-secondary btn-small" id="settingsToggle">Settings</button>
+      </div>
     </header>
 
     <main>
+      <section class="settings-card hidden" id="settingsSection">
+        <h2>Model &amp; API settings</h2>
+        <p class="settings-intro">Ollama models come from <code>ollama list</code> on this machine. Gemini uses the dropdown below — each resume uses several API calls, so free-tier daily limits apply.</p>
+
+        <div class="settings-grid">
+          <label class="field">
+            <span class="field-label">Provider</span>
+            <select id="providerSelect" class="field-input">
+              <option value="ollama">Ollama (local)</option>
+              <option value="gemini">Google Gemini (cloud)</option>
+            </select>
+          </label>
+
+          <label class="field" id="modelField">
+            <span class="field-label">Installed Ollama model</span>
+            <select id="modelSelect" class="field-input">
+              <option value="">Loading…</option>
+            </select>
+          </label>
+
+          <label class="field hidden" id="geminiModelField">
+            <span class="field-label">Gemini model</span>
+            <select id="geminiModelSelect" class="field-input">
+              <option value="">Loading…</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="field hidden" id="geminiKeyGroup">
+          <span class="field-label">Gemini API key</span>
+          <input
+            type="password"
+            id="geminiApiKey"
+            class="field-input"
+            placeholder="Paste your Gemini API key"
+            autocomplete="off"
+          />
+          <p class="field-hint">
+            Use an API key from
+            <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio</a>.
+            Valid keys start with <code>AIza</code> or <code>AQ.</code>.
+            <span id="geminiKeyPreview"></span>
+          </p>
+        </div>
+
+        <div class="settings-actions">
+          <button type="button" class="btn btn-primary" id="saveSettingsBtn">Save settings</button>
+          <button type="button" class="btn btn-secondary" id="refreshModelsBtn">Refresh models</button>
+          <p class="settings-status" id="settingsStatus"></p>
+        </div>
+      </section>
+
       <section class="upload-card" id="uploadSection">
         <div class="dropzone" id="dropzone">
           <div class="dropzone-icon">PDF</div>
@@ -28,7 +82,7 @@
           <input type="file" id="fileInput" accept=".pdf,application/pdf" hidden />
           <button type="button" class="btn btn-primary" id="browseBtn">Choose file</button>
         </div>
-        <p class="hint">First run may take several minutes. Core scoring by <a href="https://github.com/interviewstreet/hiring-agent" target="_blank" rel="noopener">HackerRank Hiring Agent</a>.</p>
+        <p class="hint">Configure model in <strong>Settings</strong> above, then upload. First run may take several minutes.</p>
       </section>
 
       <section class="loading hidden" id="loadingSection">
@@ -50,6 +104,7 @@
             <p class="eyebrow">Evaluation complete</p>
             <h2 id="candidateName">Candidate</h2>
             <p class="cache-note hidden" id="cacheNote">Loaded from cache — faster re-evaluation</p>
+            <p class="results-model hidden" id="resultsModel"></p>
           </div>
           <div class="score-ring">
             <span class="score-value" id="finalScore">0</span>
@@ -85,6 +140,6 @@
     </main>
   </div>
 
-  <script src="/static/app.js"></script>
+  <script src="/static/app.js?v=16"></script>
 </body>
 </html>

@@ -5,11 +5,18 @@ import os
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
+from llm_utils import LLMRequestError
 from config import DEVELOPMENT_MODE
+from evaluator import ResumeEvaluator
 from github import fetch_and_display_github_info
 from models import EvaluationData, JSONResume
 from pdf import PDFHandler
-from score import _evaluate_resume, find_profile, is_valid_resume_data
+from prompt import DEFAULT_MODEL, MODEL_PARAMETERS
+from score import find_profile, is_valid_resume_data
+from transform import (
+    convert_github_data_to_text,
+    convert_json_resume_to_text,
+)
 
 CATEGORY_LABELS = {
     "open_source": "Open Source",
@@ -79,6 +86,7 @@ def evaluation_to_response(
     return {
         "candidate_name": candidate_name,
         "from_cache": from_cache,
+        "model": None,
         "basics": basics,
         "overall": {
             "final_score": round(final_score, 1),
@@ -97,7 +105,9 @@ def evaluation_to_response(
     }
 
 
-def extract_resume_from_pdf(pdf_path: str) -> Tuple[JSONResume, bool]:
+def extract_resume_from_pdf(
+    pdf_path: str, model_name: Optional[str] = None
+) -> Tuple[JSONResume, bool]:
     """Extract structured resume data from a PDF, using cache when available."""
     basename = os.path.basename(pdf_path).replace(".pdf", "")
     cache_filename = f"cache/resumecache_{basename}.json"
@@ -116,10 +126,15 @@ def extract_resume_from_pdf(pdf_path: str) -> Tuple[JSONResume, bool]:
             except OSError:
                 pass
 
-    pdf_handler = PDFHandler()
-    resume_data = pdf_handler.extract_json_from_pdf(pdf_path)
+    pdf_handler = PDFHandler(model_name=model_name)
+    try:
+        resume_data = pdf_handler.extract_json_from_pdf(pdf_path)
+    except LLMRequestError:
+        raise
     if resume_data is None:
-        raise ValueError("Failed to extract data from the PDF.")
+        raise ValueError(
+            "Failed to extract data from the PDF. The file may be unreadable or the model could not parse it."
+        )
 
     if DEVELOPMENT_MODE and is_valid_resume_data(resume_data):
         os.makedirs(os.path.dirname(cache_filename), exist_ok=True)
@@ -132,7 +147,9 @@ def extract_resume_from_pdf(pdf_path: str) -> Tuple[JSONResume, bool]:
 
 
 def fetch_github_for_resume(
-    resume_data: JSONResume, pdf_path: Optional[str] = None
+    resume_data: JSONResume,
+    pdf_path: Optional[str] = None,
+    model_name: Optional[str] = None,
 ) -> dict:
     """Fetch GitHub enrichment data for a resume, using cache when available."""
     basename = (
@@ -164,7 +181,9 @@ def fetch_github_for_resume(
     github_profile = find_profile(profiles, "Github")
 
     if github_profile:
-        github_data = fetch_and_display_github_info(github_profile.url) or {}
+        github_data = fetch_and_display_github_info(
+            github_profile.url, model_name=model_name
+        ) or {}
         if (
             DEVELOPMENT_MODE
             and github_data
@@ -185,9 +204,18 @@ def evaluate_resume_data(
     github_data: Optional[dict] = None,
     *,
     from_cache: bool = False,
+    model_name: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Evaluate structured resume data and return API response."""
-    evaluation = _evaluate_resume(resume_data, github_data or {})
+    active_model = model_name or DEFAULT_MODEL
+    model_params = MODEL_PARAMETERS.get(active_model)
+    evaluator = ResumeEvaluator(model_name=active_model, model_params=model_params)
+
+    resume_text = convert_json_resume_to_text(resume_data)
+    if github_data:
+        resume_text += convert_github_data_to_text(github_data)
+
+    evaluation = evaluator.evaluate_resume(resume_text)
     if evaluation is None:
         raise ValueError("Evaluation failed to produce results.")
 
@@ -195,16 +223,27 @@ def evaluate_resume_data(
     if resume_data.basics and resume_data.basics.name:
         candidate_name = resume_data.basics.name
 
-    return evaluation_to_response(
+    result = evaluation_to_response(
         evaluation,
         candidate_name,
         resume_data,
         from_cache=from_cache,
     )
+    result["model"] = active_model
+    return result
 
 
-def evaluate_resume_pdf(pdf_path: str) -> Dict[str, Any]:
+def evaluate_resume_pdf(
+    pdf_path: str, model_name: Optional[str] = None
+) -> Dict[str, Any]:
     """Run the full resume-to-score pipeline from a PDF path."""
-    resume_data, from_cache = extract_resume_from_pdf(pdf_path)
-    github_data = fetch_github_for_resume(resume_data, pdf_path)
-    return evaluate_resume_data(resume_data, github_data, from_cache=from_cache)
+    resume_data, from_cache = extract_resume_from_pdf(pdf_path, model_name=model_name)
+    github_data = fetch_github_for_resume(
+        resume_data, pdf_path, model_name=model_name
+    )
+    return evaluate_resume_data(
+        resume_data,
+        github_data,
+        from_cache=from_cache,
+        model_name=model_name,
+    )

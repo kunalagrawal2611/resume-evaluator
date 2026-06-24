@@ -20,7 +20,7 @@ from models import (
     ProjectsSection,
     AwardsSection,
 )
-from llm_utils import initialize_llm_provider, extract_json_from_response
+from llm_utils import initialize_llm_provider, extract_json_from_response, format_llm_error, LLMRequestError
 from pymupdf_rag import to_markdown
 from typing import List, Optional, Dict, Any
 from prompt import (
@@ -36,13 +36,14 @@ logger = logging.getLogger(__name__)
 
 
 class PDFHandler:
-    def __init__(self):
+    def __init__(self, model_name: Optional[str] = None):
+        self.model_name = model_name or DEFAULT_MODEL
         self.template_manager = TemplateManager()
         self._initialize_llm_provider()
 
     def _initialize_llm_provider(self):
         """Initialize the appropriate LLM provider based on the model."""
-        self.provider = initialize_llm_provider(DEFAULT_MODEL)
+        self.provider = initialize_llm_provider(self.model_name)
 
     def extract_text_from_pdf(self, pdf_path: str) -> Optional[str]:
         try:
@@ -69,11 +70,11 @@ class PDFHandler:
         try:
             start_time = time.time()
             logger.debug(
-                f"🔄 Extracting {section_name} section using {DEFAULT_MODEL}..."
+                f"🔄 Extracting {section_name} section using {self.model_name}..."
             )
 
             model_params = MODEL_PARAMETERS.get(
-                DEFAULT_MODEL, {"temperature": 0.1, "top_p": 0.9}
+                self.model_name, {"temperature": 0.1, "top_p": 0.9}
             )
 
             section_system_message = self.template_manager.render_template(
@@ -86,7 +87,7 @@ class PDFHandler:
                 return None
 
             chat_params = {
-                "model": DEFAULT_MODEL,
+                "model": self.model_name,
                 "messages": [
                     {"role": "system", "content": section_system_message},
                     {"role": "user", "content": prompt},
@@ -131,7 +132,7 @@ class PDFHandler:
 
         except Exception as e:
             logger.error(f"❌ Error calling LLM for {section_name} section: {e}")
-            return None
+            raise LLMRequestError(format_llm_error(e), original=e) from e
 
     def extract_basics_section(self, resume_text: str) -> Optional[Dict]:
         prompt = self.template_manager.render_template(
@@ -212,9 +213,11 @@ class PDFHandler:
             logger.debug("🔄 Extracting all sections separately...")
             return self._extract_all_sections_separately(text_content)
 
+        except LLMRequestError:
+            raise
         except Exception as e:
             logger.error(f"❌ Error during PDF to JSON extraction: {e}")
-            return None
+            raise LLMRequestError(format_llm_error(e), original=e) from e
 
     def _extract_section_data(
         self, text_content: str, section_name: str, return_model=None
